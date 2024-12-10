@@ -3,10 +3,11 @@ package jwt
 import (
 	"crypto/rsa"
 	"errors"
-	"github.com/Mona-bele/logutils-go/logutils"
-	"github.com/golang-jwt/jwt/v5"
-	"ithub.com/Mona-bele/rote-notify/pkg/env"
 	"time"
+
+	"github.com/Mona-bele/logutils-go/logutils"
+	"github.com/Mona-bele/rote-notify/pkg/env"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const (

@@ -2,9 +2,10 @@ package rabbitmq
 
 import (
 	"fmt"
+
 	"github.com/Mona-bele/logutils-go/logutils"
+	"github.com/Mona-bele/rote-notify/pkg/env"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"ithub.com/Mona-bele/rote-notify/pkg/env"
 )
 
 const (

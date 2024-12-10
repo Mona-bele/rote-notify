@@ -2,11 +2,12 @@ package notifications_user_id
 
 import (
 	"fmt"
+
 	"github.com/Mona-bele/logutils-go/logutils"
-	"ithub.com/Mona-bele/rote-notify/core/entity"
-	"ithub.com/Mona-bele/rote-notify/pkg/env"
-	"ithub.com/Mona-bele/rote-notify/pkg/rabbitmq"
-	"ithub.com/Mona-bele/rote-notify/pkg/security/jwt"
+	"github.com/Mona-bele/rote-notify/core/entity"
+	"github.com/Mona-bele/rote-notify/pkg/env"
+	"github.com/Mona-bele/rote-notify/pkg/rabbitmq"
+	"github.com/Mona-bele/rote-notify/pkg/security/jwt"
 )
 
 // NotificationsUserId struct
