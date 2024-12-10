@@ -16,6 +16,7 @@ const (
 	REQUEST_EXCHANGE NotifyTypeMessage = NotifyTypeMessage("request_exchange")
 	REQUEST_EXPIRED  NotifyTypeMessage = NotifyTypeMessage("request_expired")
 	REQUEST_ACCEPTED NotifyTypeMessage = NotifyTypeMessage("request_accepted")
+	REQUEST_REJECTED NotifyTypeMessage = NotifyTypeMessage("request_rejected")
 	NEW_POST         NotifyTypeMessage = NotifyTypeMessage("new_post")
 )
 
@@ -27,6 +28,7 @@ var MapNotifyTypeMessage = map[NotifyTypeMessage]string{
 	REQUEST_EXCHANGE: "New purchase request",
 	REQUEST_EXPIRED:  "Expired purchase request",
 	REQUEST_ACCEPTED: "Purchase request accepted",
+	REQUEST_REJECTED: "Purchase request rejected",
 	NEW_POST:         "New post",
 }
 
