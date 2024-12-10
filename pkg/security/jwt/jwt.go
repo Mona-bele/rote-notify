@@ -19,11 +19,11 @@ const (
 // JWT struct
 type JWT struct {
 	PrivateKey *rsa.PrivateKey
-	env.Env
+	*env.Env
 }
 
 // NewJWT creates a new JWT instance
-func NewJWT(privateKey *rsa.PrivateKey, env env.Env) *JWT {
+func NewJWT(privateKey *rsa.PrivateKey, env *env.Env) *JWT {
 	return &JWT{PrivateKey: privateKey, Env: env}
 }
 
@@ -134,7 +134,7 @@ func ParsePublicKey(pem []byte) (*rsa.PublicKey, error) {
 }
 
 // NewJWTFromEnv creates a new JWT instance from the environment
-func NewJWTFromEnv(env env.Env) (*JWT, error) {
+func NewJWTFromEnv(env *env.Env) (*JWT, error) {
 	privateKey, err := ParsePrivateKey([]byte(env.JwtNotifyPrivateKey))
 	if err != nil {
 		logutils.Error("Failed to parse the private key", err, nil)
