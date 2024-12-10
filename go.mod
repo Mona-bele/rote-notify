@@ -1,4 +1,4 @@
-module ithub.com/Mona-bele/rote-notify
+module github.com/Mona-bele/rote-notify
 
 go 1.23.0
 
