@@ -23,3 +23,9 @@ go.work.sum
 
 # env file
 .env
+
+# .pem files
+pkg/security/jwt/*.pem
+pkg/security/jwt/public_key.pem
+
+.idea/
