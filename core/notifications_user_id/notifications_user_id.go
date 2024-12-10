@@ -1,6 +1,7 @@
 package notifications_user_id
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Mona-bele/logutils-go/logutils"
@@ -35,7 +36,7 @@ func NewNotificationsUserId(env env.Env) *NotificationsUserId {
 }
 
 // NotifyUserId notifies the user ID
-func (n *NotificationsUserId) NotifyUserId(userID string, typeMessage entity.NotifyTypeMessage) {
+func (n *NotificationsUserId) NotifyUserId(ctx context.Context, userID string, typeMessage entity.NotifyTypeMessage) {
 
 	n.RabbitMQ.CreateUserQueue(userID, false)
 
@@ -62,7 +63,7 @@ func (n *NotificationsUserId) NotifyUserId(userID string, typeMessage entity.Not
 }
 
 // DeleteNotificationsUserId deletes the user ID
-func (n *NotificationsUserId) DeleteNotificationsUserId(userID string) {
+func (n *NotificationsUserId) DeleteNotificationsUserId(ctx context.Context, userID string) {
 	n.RabbitMQ.DeleteUserQueue(userID)
 }
 
