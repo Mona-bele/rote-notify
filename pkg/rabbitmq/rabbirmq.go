@@ -73,11 +73,21 @@ func connectRabbitMQ(env *env.Env) (*amqp.Connection, *amqp.Channel) {
 // CreateUserQueue Create a user-specific queue
 func (r *RabbitMQ) CreateUserQueue(userID string, temporary bool) {
 	queueName := "user_" + userID
+
+
 	args := make(amqp.Table)
 	if temporary {
 		args["x-expires"] = TtlAmpqExpired365Days
 	}
 	args["x-message-ttl"] = TtlAmpqExpired365Days
+
+	// verify if the queue already exists QueueDeclarePassive
+	_, err := r.Ch.QueueDeclarePassive(queueName, !temporary, false, false, false, args)
+	if err == nil {
+		logutils.Warn("Queue already exists", map[string]interface{}{"queue": queueName})
+		return
+	}
+
 	q, err := r.Ch.QueueDeclare(queueName, !temporary, false, false, false, args)
 	if err != nil {
 		logutils.Error("Failed to declare a queue", err, nil)
