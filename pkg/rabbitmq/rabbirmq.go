@@ -43,13 +43,13 @@ func (r *RabbitMQ) CloseRabbitMQ() {
 }
 
 // NewRabbitMQ creates a new RabbitMQ instance
-func NewRabbitMQ(env env.Env) *RabbitMQ {
+func NewRabbitMQ(env *env.Env) *RabbitMQ {
 	conn, ch := connectRabbitMQ(env)
 	return &RabbitMQ{Conn: conn, Ch: ch}
 }
 
 // connectRabbitMQ to RabbitMQ
-func connectRabbitMQ(env env.Env) (*amqp.Connection, *amqp.Channel) {
+func connectRabbitMQ(env *env.Env) (*amqp.Connection, *amqp.Channel) {
 	conn, err := amqp.Dial(env.RabbitmqUrl)
 	if err != nil {
 		logutils.Error("Failed to connect to RabbitMQ", err, nil)

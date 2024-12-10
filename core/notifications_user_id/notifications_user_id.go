@@ -13,13 +13,13 @@ import (
 
 // NotificationsUserId struct
 type NotificationsUserId struct {
-	env      env.Env
+	env      *env.Env
 	RabbitMQ *rabbitmq.RabbitMQ
 	jwt      *jwt.JWT
 }
 
 // NewNotificationsUserId creates a new NotificationsUserId instance
-func NewNotificationsUserId(env env.Env) *NotificationsUserId {
+func NewNotificationsUserId(env *env.Env) *NotificationsUserId {
 
 	rmq := rabbitmq.NewRabbitMQ(env)
 	jwt, err := jwt.NewJWTFromEnv(env)

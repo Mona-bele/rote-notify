@@ -23,7 +23,7 @@ func TestNewJWT(t *testing.T) {
 		// It should return a new JWT instance
 		// Arrange
 		privateKey, _ := rsa.GenerateKey(rand.Reader, 2048)
-		envJWT := env.Env{
+		envJWT := &env.Env{
 			JwtKid: "JWT_KID_1234",
 		}
 		// Act
@@ -46,7 +46,7 @@ func TestGenerateToken(t *testing.T) {
 
 		privateKey, _ := ParsePrivateKey(body)
 
-		envJWT := env.Env{
+		envJWT := &env.Env{
 			JwtKid: "JWT_KID_1234",
 		}
 		jwt := NewJWT(privateKey, envJWT)
@@ -73,7 +73,7 @@ func TestParseToken(t *testing.T) {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		envJWT := env.Env{
+		envJWT := &env.Env{
 			JwtNotifyPrivateKey: string(bpk),
 			JwtKid:              "JWT_KID_1234",
 		}
@@ -108,7 +108,7 @@ func TestParseToken(t *testing.T) {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		envJWT := env.Env{
+		envJWT := &env.Env{
 			JwtKid: "JWT_KID_1234",
 		}
 		jwt := NewJWT(privateKey, envJWT)
@@ -134,7 +134,7 @@ func TestParseToken(t *testing.T) {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		envJWT := env.Env{
+		envJWT := &env.Env{
 			JwtKid: "JWT_KID_1234",
 		}
 		jwt := NewJWT(privateKey, envJWT)
@@ -159,7 +159,7 @@ func TestParseToken(t *testing.T) {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		envJWT := env.Env{
+		envJWT := &env.Env{
 			JwtKid: "JWT_KID_1234",
 		}
 		jwt := NewJWT(privateKey, envJWT)
