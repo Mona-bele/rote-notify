@@ -38,8 +38,6 @@ func NewNotificationsUserId(env *env.Env) *NotificationsUserId {
 // NotifyUserId notifies the user ID
 func (n *NotificationsUserId) NotifyUserId(ctx context.Context, userID string, typeMessage entity.NotifyTypeMessage) {
 
-	n.RabbitMQ.CreateUserQueue(userID, false)
-
 	token, err := n.jwt.GenerateToken(typeMessage.GetNotifyTypeMessage(), n.env.JwtIssuer, n.env.JwtAudience, n.env.JwtSubject)
 	if err != nil {
 		logutils.Error("Failed to generate a JWT token", err, nil)
