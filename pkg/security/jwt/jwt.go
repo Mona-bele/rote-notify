@@ -2,6 +2,7 @@ package jwt
 
 import (
 	"crypto/rsa"
+	"encoding/base64"
 	"errors"
 	"time"
 
@@ -135,7 +136,14 @@ func ParsePublicKey(pem []byte) (*rsa.PublicKey, error) {
 
 // NewJWTFromEnv creates a new JWT instance from the environment
 func NewJWTFromEnv(env *env.Env) (*JWT, error) {
-	privateKey, err := ParsePrivateKey([]byte(env.JwtNotifyPrivateKey))
+
+	decodeKey, err := base64.StdEncoding.DecodeString(env.JwtNotifyPrivateKey)
+	if err != nil {
+		logutils.Error("Failed to decode the private key", err, nil)
+		return nil, err
+	}
+
+	privateKey, err := ParsePrivateKey(decodeKey)
 	if err != nil {
 		logutils.Error("Failed to parse the private key", err, nil)
 		return nil, err
