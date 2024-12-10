@@ -18,6 +18,15 @@ type NotificationsUserId struct {
 	jwt      *jwt.JWT
 }
 
+type Body struct {
+	DeviceToken string `json:"device_token"`
+	Content     string `json:"content"`
+}
+
+func (b *Body) String() string {
+	return fmt.Sprintf("DeviceToken: %s, Content: %s", b.DeviceToken, b.Content)
+}
+
 // NewNotificationsUserId creates a new NotificationsUserId instance
 func NewNotificationsUserId(env *env.Env) *NotificationsUserId {
 
@@ -40,7 +49,11 @@ func (n *NotificationsUserId) NotifyUserId(ctx context.Context, userID string, t
 
 	n.RabbitMQ.CreateUserQueue(userID, false)
 
-	token, err := n.jwt.GenerateToken(typeMessage.GetNotifyTypeMessage(), n.env.JwtIssuer, n.env.JwtAudience, n.env.JwtSubject)
+	body := Body{
+		Content: typeMessage.GetNotifyTypeMessage(),
+	}
+
+	token, err := n.jwt.GenerateToken(body.String(), n.env.JwtIssuer, n.env.JwtAudience, n.env.JwtSubject)
 	if err != nil {
 		logutils.Error("Failed to generate a JWT token", err, nil)
 		return

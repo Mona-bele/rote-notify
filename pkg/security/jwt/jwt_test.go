@@ -41,8 +41,15 @@ func TestGenerateToken(t *testing.T) {
 		// It should return a JWT token
 		// Arrange
 		file, err := os.Open("private_key.pem")
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+		defer file.Close()
 
-		body, _ := io.ReadAll(file)
+		body, err := io.ReadAll(file)
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
 
 		privateKey, _ := ParsePrivateKey(body)
 
@@ -52,6 +59,9 @@ func TestGenerateToken(t *testing.T) {
 		jwt := NewJWT(privateKey, envJWT)
 		// Act
 		token, err := jwt.GenerateToken("payloadTESTE", "issuer", "audience", "subject")
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
 		fmt.Println(token)
 		// Assert
 		if err != nil {
@@ -68,19 +78,19 @@ func TestParseToken(t *testing.T) {
 		// TestParseToken tests the ParseToken function
 		// It should return a JWT token
 		// Arrange
-		bpk, err := base64.StdEncoding.DecodeString(testPemBase64)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		}
 
 		envJWT := &env.Env{
-			JwtNotifyPrivateKey: string(bpk),
+			JwtNotifyPrivateKey: string(testPemBase64),
 			JwtKid:              "JWT_KID_1234",
 		}
 
 		jwt, err := NewJWTFromEnv(envJWT)
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
 
 		token, err := jwt.GenerateToken("payloadTESTE", "issuer", "audience", "subject")
+		assert.Nil(t, err)
 		// Act
 		content, err := jwt.ParseToken(token, "issuer", "audience", "subject")
 		// Assert

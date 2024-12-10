@@ -29,3 +29,5 @@ pkg/security/jwt/*.pem
 pkg/security/jwt/public_key.pem
 
 .idea/
+
+tmp*
