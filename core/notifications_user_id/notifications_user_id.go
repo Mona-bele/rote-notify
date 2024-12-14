@@ -2,6 +2,7 @@ package notifications_user_id
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/Mona-bele/logutils-go/logutils"
@@ -20,11 +21,19 @@ type NotificationsUserId struct {
 
 type Body struct {
 	DeviceToken string `json:"device_token"`
-	Content     string `json:"content"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
 }
 
 func (b *Body) String() string {
-	return fmt.Sprintf("DeviceToken: %s, Content: %s", b.DeviceToken, b.Content)
+	// Convert the Body struct to a JSON string
+	bodyJson, err := json.Marshal(b)
+	if err != nil {
+		logutils.Error("Failed to marshal the body", err, nil)
+		return ""
+	}
+
+	return string(bodyJson)
 }
 
 // NewNotificationsUserId creates a new NotificationsUserId instance
@@ -50,7 +59,8 @@ func (n *NotificationsUserId) NotifyUserId(ctx context.Context, userID string, t
 	n.RabbitMQ.CreateUserQueue(userID, false)
 
 	body := Body{
-		Content: typeMessage.GetNotifyTypeMessage(),
+		Title:       typeMessage.String(),
+		Description: typeMessage.GetNotifyTypeMessage(),
 	}
 
 	token, err := n.jwt.GenerateToken(body.String(), n.env.JwtIssuer, n.env.JwtAudience, n.env.JwtSubject)
