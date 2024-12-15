@@ -11,7 +11,7 @@ import (
 const (
 	exchangeName          = "ex_notifications_user_id"
 	exchangeType          = "topic"
-	TtlAmpqExpired365Days = 31536000000
+	TtlAmpqExpired365Days = int32(1471228928)
 )
 
 // RabbitMQ struct
