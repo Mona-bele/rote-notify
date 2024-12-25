@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	exchangeName          = "ex_notifications_user_id"
+	exchangeName          = "ex.picle.notification"
 	exchangeType          = "topic"
 	TtlAmpqExpired365Days = int32(1471228928)
 )
@@ -83,14 +83,33 @@ func (r *RabbitMQ) CreateUserQueue(userID string, temporary bool) {
 	q, err := r.Ch.QueueDeclare(queueName, !temporary, false, false, false, args)
 	if err != nil {
 		logutils.Error("Failed to declare a queue", err, nil)
+		return
 	}
 
 	err = r.Ch.QueueBind(q.Name, fmt.Sprintf("user.%s.*", userID), exchangeName, false, nil)
 	if err != nil {
 		logutils.Error("Failed to bind a queue", err, nil)
+		return
 	}
 
 	args = nil
+
+	logutils.Info("Queue created", map[string]interface{}{"queue": q.Name})
+}
+
+// QueuePicle Create a queue for picle notifications
+func (r *RabbitMQ) QueuePicle() {
+	q, err := r.Ch.QueueDeclare("queue_picle_notification", true, false, false, false, nil)
+	if err != nil {
+		logutils.Error("Failed to declare a queue", err, nil)
+		return
+	}
+
+	err = r.Ch.QueueBind(q.Name, "rk.picle.notification", exchangeName, false, nil)
+	if err != nil {
+		logutils.Error("Failed to bind a queue", err, nil)
+		return
+	}
 
 	logutils.Info("Queue created", map[string]interface{}{"queue": q.Name})
 }
@@ -106,9 +125,9 @@ func (r *RabbitMQ) DeleteUserQueue(userID string) {
 }
 
 // PublishMessage Publish a message to the exchange
-func (r *RabbitMQ) PublishMessage(message Message) error {
+func (r *RabbitMQ) PublishMessage(message Message, contentType string) error {
 	err := r.Ch.Publish(exchangeName, message.RoutingKey, false, false, amqp.Publishing{
-		ContentType: "text/plain",
+		ContentType: contentType,
 		Body:        message.Body,
 	})
 	if err != nil {
@@ -130,4 +149,31 @@ func (r *RabbitMQ) ConsumeMessages(userID string) <-chan amqp.Delivery {
 	logutils.Info("Consuming messages", map[string]interface{}{"queue": queueName})
 
 	return msgs
+}
+
+// VerifyMessageInQueue not read messages count of messages not awaiting acknowledgment
+func (r *RabbitMQ) VerifyMessageInQueue(userID string) (int, error) {
+	queueName := "user_" + userID
+	msgs, err := r.Ch.Consume(queueName, "", false, false, false, false, nil)
+	if err != nil {
+		logutils.Error("Failed to consume messages", err, nil)
+		return 0, err
+	}
+
+	select {
+	case msg := <-msgs:
+		if msg.Body == nil {
+			logutils.Info("No messages in the queue", nil)
+			return 0, nil
+		}
+		logutils.Warn("Messages in the queue", nil)
+		rejectRabbitMessage(msg)
+		return 1, nil
+	}
+}
+
+func rejectRabbitMessage(msg amqp.Delivery) {
+	if err := msg.Reject(true); err != nil {
+		logutils.Error("Error rejecting message: ", err, nil)
+	}
 }

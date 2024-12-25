@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
 	"github.com/Mona-bele/logutils-go/logutils"
 	"github.com/Mona-bele/rote-notify/core/entity"
 	"github.com/Mona-bele/rote-notify/pkg/env"
@@ -23,6 +22,14 @@ type Body struct {
 	DeviceToken string `json:"device_token"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
+}
+
+type BodyPicle struct {
+	RecipientID string `json:"recipient_id"`
+	Title       string `json:"title"`
+	Body        string `json:"body"`
+	Type        string `json:"type"`
+	IsRead      bool   `json:"is_read"`
 }
 
 func (b *Body) String() string {
@@ -76,18 +83,66 @@ func (n *NotificationsUserId) NotifyUserId(ctx context.Context, userID string, t
 		Body:       []byte(token),
 	}
 
-	err = n.RabbitMQ.PublishMessage(message)
+	err = n.RabbitMQ.PublishMessage(message, "text/plain")
 	if err != nil {
 		logutils.Error("Failed to publish a message", err, nil)
+		return
+	}
+
+	// Queue picle
+	n.NotifyPicle(ctx, userID, typeMessage)
+
+	logutils.Info("User ID notified", logutils.Fields{"user_id": userID, "type": typeMessage.GetNotifyTypeMessage()})
+}
+
+// NotifyPicle notifies the user ID
+func (n *NotificationsUserId) NotifyPicle(ctx context.Context, userID string, typeMessage entity.NotifyTypeMessage) {
+
+	n.RabbitMQ.QueuePicle()
+
+	bodyPicle := BodyPicle{
+		RecipientID: userID,
+		Title:       typeMessage.String(),
+		Body:        typeMessage.GetNotifyTypeMessage(),
+		Type:        typeMessage.String(),
+		IsRead:      false,
+	}
+
+	bodyPicleJson, err := json.Marshal(bodyPicle)
+	if err != nil {
+		logutils.Error("Failed to marshal the body", err, nil)
+	}
+
+	messagePicle := rabbitmq.Message{
+		Type:       typeMessage.String(),
+		UserID:     userID,
+		RoutingKey: "rk.picle.notification",
+		Body:       bodyPicleJson,
+	}
+
+	err = n.RabbitMQ.PublishMessage(messagePicle, "application/json")
+	if err != nil {
+		logutils.Error("Failed to publish a message to picle", err, nil)
 		return
 	}
 
 	logutils.Info("User ID notified", logutils.Fields{"user_id": userID, "type": typeMessage.GetNotifyTypeMessage()})
 }
 
-// DeleteNotificationsUserId deletes the user ID
+// DeleteNotificationsUserId deletes the user ID if exists messages in the queue
 func (n *NotificationsUserId) DeleteNotificationsUserId(ctx context.Context, userID string) {
-	n.RabbitMQ.DeleteUserQueue(userID)
+	msgs, err := n.RabbitMQ.VerifyMessageInQueue(userID)
+	if err != nil {
+		logutils.Error("Failed to verify messages in the queue", err, nil)
+		return
+	}
+
+	logutils.Warn("User ID has messages in the queue", logutils.Fields{"user_id": userID, "messages": msgs})
+	if msgs < 0 {
+		logutils.Info("User ID deleted", logutils.Fields{"user_id": userID})
+		n.RabbitMQ.DeleteUserQueue(userID)
+	}
+
 }
 
 // CloseNotificationsUserId closes the RabbitMQ connection
