@@ -61,7 +61,7 @@ func NewNotificationsUserId(env *env.Env) *NotificationsUserId {
 	}
 }
 
-// NotifyUserId notifies the user ID
+/*// NotifyUserId notifies the user ID
 func (n *NotificationsUserId) NotifyUserId(ctx context.Context, userID string, typeMessage entity.NotifyTypeMessage) {
 
 	n.RabbitMQ.CreateUserQueue(userID, false)
@@ -95,6 +95,7 @@ func (n *NotificationsUserId) NotifyUserId(ctx context.Context, userID string, t
 
 	logutils.Info("User ID notified", logutils.Fields{"user_id": userID, "type": typeMessage.GetNotifyTypeMessage()})
 }
+*/
 
 // NotifyPicle notifies the user ID
 func (n *NotificationsUserId) NotifyPicle(ctx context.Context, userID string, body []byte, typeMessage entity.NotifyTypeMessage) {
@@ -137,7 +138,7 @@ func (n *NotificationsUserId) NotifyPicle(ctx context.Context, userID string, bo
 	logutils.Info("User ID notified", logutils.Fields{"user_id": userID, "type": typeMessage.GetNotifyTypeMessage()})
 }
 
-// DeleteNotificationsUserId deletes the user ID if exists messages in the queue
+/*// DeleteNotificationsUserId deletes the user ID if exists messages in the queue
 func (n *NotificationsUserId) DeleteNotificationsUserId(ctx context.Context, userID string) {
 	msgs, err := n.RabbitMQ.VerifyMessageInQueue(userID)
 	if err != nil {
@@ -151,7 +152,7 @@ func (n *NotificationsUserId) DeleteNotificationsUserId(ctx context.Context, use
 		n.RabbitMQ.DeleteUserQueue(userID)
 	}
 
-}
+}*/
 
 // CloseNotificationsUserId closes the RabbitMQ connection
 func (n *NotificationsUserId) CloseNotificationsUserId() {
