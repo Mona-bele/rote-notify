@@ -19,12 +19,12 @@ func LoadEnv(path string) *Env {
 	_ = godotenv.Load(path)
 
 	return &Env{
-		RabbitmqUrl:         getEnv("RABBITMQ_URL"),
-		JwtNotifyPrivateKey: getEnv("JWT_NOTIFY_PRIVATE_KEY"),
+		RabbitmqUrl: getEnv("RABBITMQ_URL"),
+		/*JwtNotifyPrivateKey: getEnv("JWT_NOTIFY_PRIVATE_KEY"),
 		JwtKid:              getEnv("JWT_KID"),
 		JwtIssuer:           getEnv("JWT_ISSUER"),
 		JwtSubject:          getEnv("JWT_SUBJECT"),
-		JwtAudience:         getEnv("JWT_AUDIENCE"),
+		JwtAudience:         getEnv("JWT_AUDIENCE"),*/
 	}
 
 }

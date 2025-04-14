@@ -48,16 +48,16 @@ func (b *Body) String() string {
 func NewNotificationsUserId(env *env.Env) *NotificationsUserId {
 
 	rmq := rabbitmq.NewRabbitMQ(env)
-	jwt, err := jwt.NewJWTFromEnv(env)
+	/*jwt, err := jwt.NewJWTFromEnv(env)
 	if err != nil {
 		logutils.Error("Failed to create a new JWT instance", err, nil)
 		return nil
-	}
+	}*/
 
 	return &NotificationsUserId{
 		env:      env,
 		RabbitMQ: rmq,
-		jwt:      jwt,
+		//jwt:      jwt,
 	}
 }
 
