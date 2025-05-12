@@ -135,6 +135,19 @@ func (n *NotificationsUserId) NotifyPicle(ctx context.Context, userID string, bo
 		return
 	}
 
+	messageEmail := rabbitmq.Message{
+		Type:       typeMessage.String(),
+		UserID:     userID,
+		RoutingKey: "rk.picle.notification.email",
+		Body:       bodyPicleJson,
+	}
+
+	err = n.RabbitMQ.PublishMessage(messageEmail, "application/json")
+	if err != nil {
+		logutils.Error("Failed to publish a message to picle", err, nil)
+		return
+	}
+
 	logutils.Info("User ID notified", logutils.Fields{"user_id": userID, "type": typeMessage.GetNotifyTypeMessage()})
 }
 
