@@ -1,7 +1,10 @@
 package rabbitmq
 
 import (
+	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/Mona-bele/logutils-go/logutils"
 	"github.com/Mona-bele/rote-notify/pkg/env"
@@ -16,8 +19,10 @@ const (
 
 // RabbitMQ struct
 type RabbitMQ struct {
-	Conn *amqp.Connection
-	Ch   *amqp.Channel
+	conn        *amqp.Connection
+	ch          *amqp.Channel
+	env         *env.Env
+	reconnectCh chan struct{}
 }
 
 // Message struct
@@ -28,148 +33,146 @@ type Message struct {
 	Body       []byte `json:"body"`
 }
 
-// CloseRabbitMQ closes the RabbitMQ connection
-func (r *RabbitMQ) CloseRabbitMQ() {
-	err := r.Ch.Close()
-	if err != nil {
-		logutils.Error("Failed to close the channel", err, nil)
+// NewRabbitMQ creates a new RabbitMQ instance
+func NewRabbitMQ(env *env.Env) *RabbitMQ {
+	rmq := &RabbitMQ{
+		env:         env,
+		reconnectCh: make(chan struct{}),
 	}
+	go rmq.connectWithRetry()
+	return rmq
+}
 
-	err = r.Conn.Close()
-	if err != nil {
-		logutils.Error("Failed to close the connection", err, nil)
+func (r *RabbitMQ) connectWithRetry() {
+	for {
+		conn, err := amqp.Dial(r.env.RabbitmqUrl)
+		if err != nil {
+			logutils.Error("Failed to connect to RabbitMQ, retrying...", err, nil)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		ch, err := conn.Channel()
+		if err != nil {
+			logutils.Error("Failed to open a channel, retrying...", err, nil)
+			_ = conn.Close()
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		err = ch.Confirm(false)
+		if err != nil {
+			logutils.Error("Failed to put channel in confirm mode", err, nil)
+		}
+
+		r.conn = conn
+		r.ch = ch
+
+		err = ch.ExchangeDeclare(exchangeName, exchangeType, true, false, false, false, nil)
+		if err != nil {
+			logutils.Error("Failed to declare an exchange", err, nil)
+		}
+
+		logutils.Info("Connected to RabbitMQ and channel ready", nil)
+
+		notifyClose := make(chan *amqp.Error)
+		r.conn.NotifyClose(notifyClose)
+
+		select {
+		case err := <-notifyClose:
+			logutils.Warn("RabbitMQ connection closed, reconnecting...", logutils.Fields{"error": err})
+			time.Sleep(2 * time.Second)
+		}
+	}
+}
+
+func (r *RabbitMQ) CloseRabbitMQ() {
+	if r.ch != nil {
+		_ = r.ch.Close()
+	}
+	if r.conn != nil {
+		_ = r.conn.Close()
 	}
 	logutils.Info("RabbitMQ connection closed", nil)
 }
 
-// NewRabbitMQ creates a new RabbitMQ instance
-func NewRabbitMQ(env *env.Env) *RabbitMQ {
-	conn, ch := connectRabbitMQ(env)
-	return &RabbitMQ{Conn: conn, Ch: ch}
+// PublishMessage Publish a message to the exchange
+func (r *RabbitMQ) PublishMessage(message Message, contentType string) error {
+	for i := 0; i < 3; i++ {
+		err := r.ch.PublishWithContext(context.Background(),
+			exchangeName, message.RoutingKey, false, false, amqp.Publishing{
+				ContentType: contentType,
+				Body:        message.Body,
+			})
+		if err != nil {
+			logutils.Error(fmt.Sprintf("Publish attempt %d failed", i+1), err, nil)
+			time.Sleep(time.Duration(2*i+1) * time.Second)
+			continue
+		}
+
+		select {
+		case confirm := <-r.ch.NotifyPublish(make(chan amqp.Confirmation, 1)):
+			if confirm.Ack {
+				logutils.Info("Message confirmed", map[string]interface{}{"routing_key": message.RoutingKey})
+				return nil
+			}
+			logutils.Warn("Message not acknowledged, retrying...", nil)
+		case <-time.After(5 * time.Second):
+			logutils.Warn("No confirm received in time, retrying...", nil)
+		}
+	}
+	return fmt.Errorf("failed to publish message after retries")
 }
 
-// connectRabbitMQ to RabbitMQ
-func connectRabbitMQ(env *env.Env) (*amqp.Connection, *amqp.Channel) {
-	conn, err := amqp.Dial(env.RabbitmqUrl)
-	if err != nil {
-		logutils.Error("Failed to connect to RabbitMQ", err, nil)
+func (r *RabbitMQ) WaitForReady(timeout time.Duration) error {
+	start := time.Now()
+	for {
+		if r.ch != nil && !r.ch.IsClosed() {
+			return nil
+		}
+		if time.Since(start) > timeout {
+			return fmt.Errorf("RabbitMQ connection timeout after %s", timeout)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+var picleQueueDeclared bool
+var picleQueueMutex sync.Mutex
+
+func (r *RabbitMQ) QueuePicle() {
+	picleQueueMutex.Lock()
+	defer picleQueueMutex.Unlock()
+
+	if picleQueueDeclared {
+		return
 	}
 
-	ch, err := conn.Channel()
+	q, err := r.ch.QueueDeclare("queue_picle_notification", true, false, false, false, nil)
 	if err != nil {
-		logutils.Error("Failed to open a channel", err, nil)
+		logutils.Error("Failed to declare queue_picle_notification", err, nil)
+		return
 	}
 
-	err = ch.ExchangeDeclare(exchangeName, exchangeType, true, false, false, false, nil)
+	err = r.ch.ExchangeDeclare(exchangeName, exchangeType, true, false, false, false, nil)
 	if err != nil {
 		logutils.Error("Failed to declare an exchange", err, nil)
 	}
 
-	logutils.Info("Connected to RabbitMQ", nil)
-
-	return conn, ch
-}
-
-// CreateUserQueue Create a user-specific queue
-func (r *RabbitMQ) CreateUserQueue(userID string, temporary bool) {
-	queueName := "user_" + userID
-
-	args := make(amqp.Table)
-	if temporary {
-		args["x-expires"] = TtlAmpqExpired365Days
-	}
-	args["x-message-ttl"] = TtlAmpqExpired365Days
-
-	q, err := r.Ch.QueueDeclare(queueName, !temporary, false, false, false, args)
+	err = r.ch.QueueBind(q.Name, "rk.picle.notification", exchangeName, false, nil)
 	if err != nil {
-		logutils.Error("Failed to declare a queue", err, nil)
+		logutils.Error("Failed to bind queue_picle_notification", err, nil)
 		return
 	}
 
-	err = r.Ch.QueueBind(q.Name, fmt.Sprintf("user.%s.*", userID), exchangeName, false, nil)
+	err = r.ch.QueueBind(q.Name, "rk.picle.notification.email", exchangeName, false, nil)
 	if err != nil {
-		logutils.Error("Failed to bind a queue", err, nil)
+		logutils.Error("Failed to bind rk.picle.notification.email", err, nil)
 		return
 	}
 
-	args = nil
-
-	logutils.Info("Queue created", map[string]interface{}{"queue": q.Name})
-}
-
-// QueuePicle Create a queue for picle notifications
-func (r *RabbitMQ) QueuePicle() {
-	q, err := r.Ch.QueueDeclare("queue_picle_notification", true, false, false, false, nil)
-	if err != nil {
-		logutils.Error("Failed to declare a queue", err, nil)
-		return
-	}
-
-	err = r.Ch.QueueBind(q.Name, "rk.picle.notification", exchangeName, false, nil)
-	if err != nil {
-		logutils.Error("Failed to bind a queue", err, nil)
-		return
-	}
-
-	logutils.Info("Queue created", map[string]interface{}{"queue": q.Name})
-}
-
-// DeleteUserQueue Delete a user-specific queue
-func (r *RabbitMQ) DeleteUserQueue(userID string) {
-	queueName := "user_" + userID
-	_, err := r.Ch.QueueDelete(queueName, false, false, false)
-	if err != nil {
-		logutils.Error("Failed to delete a queue", err, nil)
-	}
-	logutils.Info("Queue deleted", map[string]interface{}{"queue": queueName})
-}
-
-// PublishMessage Publish a message to the exchange
-func (r *RabbitMQ) PublishMessage(message Message, contentType string) error {
-	err := r.Ch.Publish(exchangeName, message.RoutingKey, false, false, amqp.Publishing{
-		ContentType: contentType,
-		Body:        message.Body,
-	})
-	if err != nil {
-		logutils.Error("Failed to publish a message", err, nil)
-		return err
-	}
-	logutils.Info("Message published", map[string]interface{}{"routing_key": message.RoutingKey})
-
-	return nil
-}
-
-// ConsumeMessages Consume messages from the exchange
-func (r *RabbitMQ) ConsumeMessages(userID string) <-chan amqp.Delivery {
-	queueName := "user_" + userID
-	msgs, err := r.Ch.Consume(queueName, "", true, false, false, false, nil)
-	if err != nil {
-		logutils.Error("Failed to consume messages", err, nil)
-	}
-	logutils.Info("Consuming messages", map[string]interface{}{"queue": queueName})
-
-	return msgs
-}
-
-// VerifyMessageInQueue not read messages count of messages not awaiting acknowledgment
-func (r *RabbitMQ) VerifyMessageInQueue(userID string) (int, error) {
-	queueName := "user_" + userID
-	msgs, err := r.Ch.Consume(queueName, "", false, false, false, false, nil)
-	if err != nil {
-		logutils.Error("Failed to consume messages", err, nil)
-		return 0, err
-	}
-
-	select {
-	case msg := <-msgs:
-		if msg.Body == nil {
-			logutils.Info("No messages in the queue", nil)
-			return 0, nil
-		}
-		logutils.Warn("Messages in the queue", nil)
-		rejectRabbitMessage(msg)
-		return 1, nil
-	}
+	picleQueueDeclared = true
+	logutils.Info("queue_picle_notification declared and bound", map[string]interface{}{"queue": q.Name})
 }
 
 func rejectRabbitMessage(msg amqp.Delivery) {
