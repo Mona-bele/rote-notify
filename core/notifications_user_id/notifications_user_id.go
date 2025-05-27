@@ -84,7 +84,7 @@ func (n *NotificationsUserId) NotifyPicle(ctx context.Context, userID string, bo
 	err = n.RabbitMQ.PublishMessage(rabbitmq.Message{
 		Type:       typeMessage.String(),
 		UserID:     userID,
-		RoutingKey: "rk.picle.notification",
+		RoutingKey: "rk.picle.notification.app",
 		Body:       bodyPicleJson,
 	}, "application/json")
 
@@ -92,6 +92,22 @@ func (n *NotificationsUserId) NotifyPicle(ctx context.Context, userID string, bo
 		logutils.Error("Failed to publish to rk.picle.notification", err, nil)
 		return
 	}
+
+	err = n.RabbitMQ.PublishMessage(rabbitmq.Message{
+		Type:       typeMessage.String(),
+		UserID:     userID,
+		RoutingKey: "rk.picle.notification.websocket",
+		Body:       bodyPicleJson,
+	}, "application/json")
+
+	if err != nil {
+		logutils.Error("Failed to publish to rk.picle.notification.email", err, nil)
+		return
+	}
+	logutils.Info("User ID notified", logutils.Fields{
+		"user_id": userID,
+		"type":    typeMessage.GetNotifyTypeMessage(),
+	});
 }
 
 /*

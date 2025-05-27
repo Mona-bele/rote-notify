@@ -1,7 +1,6 @@
 package rabbitmq
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -19,10 +18,9 @@ const (
 
 // RabbitMQ struct
 type RabbitMQ struct {
-	conn        *amqp.Connection
-	ch          *amqp.Channel
-	env         *env.Env
-	reconnectCh chan struct{}
+	Conn *amqp.Connection
+	Ch   *amqp.Channel
+	env  *env.Env
 }
 
 // Message struct
@@ -35,99 +33,69 @@ type Message struct {
 
 // NewRabbitMQ creates a new RabbitMQ instance
 func NewRabbitMQ(env *env.Env) *RabbitMQ {
-	rmq := &RabbitMQ{
-		env:         env,
-		reconnectCh: make(chan struct{}),
-	}
-	go rmq.connectWithRetry()
-	return rmq
+	conn, ch := connectRabbitMQ(env)
+	return &RabbitMQ{Conn: conn, Ch: ch}
 }
 
-func (r *RabbitMQ) connectWithRetry() {
-	for {
-		conn, err := amqp.Dial(r.env.RabbitmqUrl)
-		if err != nil {
-			logutils.Error("Failed to connect to RabbitMQ, retrying...", err, nil)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		ch, err := conn.Channel()
-		if err != nil {
-			logutils.Error("Failed to open a channel, retrying...", err, nil)
-			_ = conn.Close()
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		err = ch.Confirm(false)
-		if err != nil {
-			logutils.Error("Failed to put channel in confirm mode", err, nil)
-		}
-
-		r.conn = conn
-		r.ch = ch
-
-		err = ch.ExchangeDeclare(exchangeName, exchangeType, true, false, false, false, nil)
-		if err != nil {
-			logutils.Error("Failed to declare an exchange", err, nil)
-		}
-
-		logutils.Info("Connected to RabbitMQ and channel ready", nil)
-
-		notifyClose := make(chan *amqp.Error)
-		r.conn.NotifyClose(notifyClose)
-
-		select {
-		case err := <-notifyClose:
-			logutils.Warn("RabbitMQ connection closed, reconnecting...", logutils.Fields{"error": err})
-			time.Sleep(2 * time.Second)
-		}
+func connectRabbitMQ(env *env.Env) (*amqp.Connection, *amqp.Channel) {
+	conn, err := amqp.Dial(env.RabbitmqUrl)
+	if err != nil {
+		logutils.Error("Failed to connect to RabbitMQ", err, nil)
+		panic("Cannot continue without RabbitMQ connection")
 	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		logutils.Error("Failed to open a channel", err, nil)
+		panic("Cannot continue without a RabbitMQ channel")
+	}
+
+	err = ch.ExchangeDeclare(exchangeName, exchangeType, true, false, false, false, nil)
+	if err != nil {
+		logutils.Error("Failed to declare an exchange", err, nil)
+		panic("Cannot continue without exchange declaration")
+	}
+
+	logutils.Info("Connected to RabbitMQ", nil)
+	return conn, ch
 }
 
 func (r *RabbitMQ) CloseRabbitMQ() {
-	if r.ch != nil {
-		_ = r.ch.Close()
+	if r.Ch != nil {
+		_ = r.Ch.Close()
 	}
-	if r.conn != nil {
-		_ = r.conn.Close()
+	if r.Conn != nil {
+		_ = r.Conn.Close()
 	}
 	logutils.Info("RabbitMQ connection closed", nil)
 }
 
 // PublishMessage Publish a message to the exchange
 func (r *RabbitMQ) PublishMessage(message Message, contentType string) error {
-	for i := 0; i < 3; i++ {
-		err := r.ch.PublishWithContext(context.Background(),
-			exchangeName, message.RoutingKey, false, false, amqp.Publishing{
-				ContentType: contentType,
-				Body:        message.Body,
-			})
-		if err != nil {
-			logutils.Error(fmt.Sprintf("Publish attempt %d failed", i+1), err, nil)
-			time.Sleep(time.Duration(2*i+1) * time.Second)
-			continue
+	var lastErr error
+	for i := 0; i < 3; i++ { // tenta até 3 vezes
+		err := r.Ch.Publish(exchangeName, message.RoutingKey, false, false, amqp.Publishing{
+			ContentType: contentType,
+			Body:        message.Body,
+		})
+		if err == nil {
+			logutils.Info("Message published", map[string]interface{}{"routing_key": message.RoutingKey})
+			return nil
 		}
 
-		select {
-		case confirm := <-r.ch.NotifyPublish(make(chan amqp.Confirmation, 1)):
-			if confirm.Ack {
-				logutils.Info("Message confirmed", map[string]interface{}{"routing_key": message.RoutingKey})
-				return nil
-			}
-			logutils.Warn("Message not acknowledged, retrying...", nil)
-		case <-time.After(5 * time.Second):
-			logutils.Warn("No confirm received in time, retrying...", nil)
-		}
+		lastErr = err
+		logutils.Warn("Retrying to publish message", map[string]interface{}{"attempt": i + 1, "error": err.Error()})
+		time.Sleep(time.Duration(i+1) * time.Second) // backoff linear
 	}
-	return fmt.Errorf("failed to publish message after retries")
+
+	logutils.Error("Failed to publish a message after retries", lastErr, nil)
+	return lastErr
 }
 
 func (r *RabbitMQ) WaitForReady(timeout time.Duration) error {
 	start := time.Now()
 	for {
-		if r.ch != nil && !r.ch.IsClosed() {
+		if r.Ch != nil && !r.Ch.IsClosed() {
 			return nil
 		}
 		if time.Since(start) > timeout {
@@ -148,24 +116,24 @@ func (r *RabbitMQ) QueuePicle() {
 		return
 	}
 
-	q, err := r.ch.QueueDeclare("queue_picle_notification", true, false, false, false, nil)
+	q, err := r.Ch.QueueDeclare("queue_picle_notification", true, false, false, false, nil)
 	if err != nil {
 		logutils.Error("Failed to declare queue_picle_notification", err, nil)
 		return
 	}
 
-	err = r.ch.ExchangeDeclare(exchangeName, exchangeType, true, false, false, false, nil)
+	err = r.Ch.ExchangeDeclare(exchangeName, exchangeType, true, false, false, false, nil)
 	if err != nil {
 		logutils.Error("Failed to declare an exchange", err, nil)
 	}
 
-	err = r.ch.QueueBind(q.Name, "rk.picle.notification", exchangeName, false, nil)
+	err = r.Ch.QueueBind(q.Name, "rk.picle.notification", exchangeName, false, nil)
 	if err != nil {
 		logutils.Error("Failed to bind queue_picle_notification", err, nil)
 		return
 	}
 
-	err = r.ch.QueueBind(q.Name, "rk.picle.notification.email", exchangeName, false, nil)
+	err = r.Ch.QueueBind(q.Name, "rk.picle.notification.email", exchangeName, false, nil)
 	if err != nil {
 		logutils.Error("Failed to bind rk.picle.notification.email", err, nil)
 		return
