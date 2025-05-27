@@ -107,7 +107,46 @@ func (n *NotificationsUserId) NotifyPicle(ctx context.Context, userID string, bo
 	logutils.Info("User ID notified", logutils.Fields{
 		"user_id": userID,
 		"type":    typeMessage.GetNotifyTypeMessage(),
-	});
+	})
+}
+
+// NotifyPicle notifies the user ID
+func (n *NotificationsUserId) NotifyApp(ctx context.Context, routingKey, userID string, body []byte, typeMessage entity.NotifyTypeMessage) {
+	if body == nil {
+		body = []byte(typeMessage.GetNotifyTypeMessage())
+	}
+
+	bodyPicle := BodyPicle{
+		RecipientID: userID,
+		Title:       typeMessage.String(),
+		Body:        string(body),
+		Type:        typeMessage.String(),
+		IsRead:      false,
+	}
+
+	bodyPicleJson, err := json.Marshal(bodyPicle)
+	if err != nil {
+		logutils.Error("Failed to marshal the body", err, nil)
+		return
+	}
+
+	// Envia para notificação em app
+	err = n.RabbitMQ.PublishMessage(rabbitmq.Message{
+		Type:       typeMessage.String(),
+		UserID:     userID,
+		RoutingKey: "rk.picle.notification." + routingKey,
+		Body:       bodyPicleJson,
+	}, "application/json")
+
+	if err != nil {
+		logutils.Error("Failed to publish to rk.picle.notification", err, nil)
+		return
+	}
+
+	logutils.Info("User ID notified", logutils.Fields{
+		"user_id": userID,
+		"type":    typeMessage.GetNotifyTypeMessage(),
+	})
 }
 
 /*
