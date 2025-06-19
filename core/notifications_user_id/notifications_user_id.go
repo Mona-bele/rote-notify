@@ -70,8 +70,6 @@ func NewNotificationsUserId(url string) *NotificationsUserId {
 		return nil
 	}
 
-	defer rmq.Close()
-
 	return &NotificationsUserId{
 		RabbitMQ: rmq,
 	}
@@ -173,4 +171,12 @@ func (n *NotificationsUserId) NotifyApp(ctx context.Context, routingKey, userID 
 		"user_id": userID,
 		"type":    typeMessage,
 	})
+}
+
+// Close closes the RabbitMQ connection
+func (n *NotificationsUserId) Close() error {
+	if n.RabbitMQ != nil {
+		return n.RabbitMQ.Close()
+	}
+	return nil
 }
