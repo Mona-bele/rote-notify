@@ -3,19 +3,14 @@ package notifications_user_id
 import (
 	"context"
 	"encoding/json"
+	"github.com/Mona-bele/commons-tools/pkg/adapter/rabbitmq"
 	"github.com/Mona-bele/logutils-go/logutils"
 	"github.com/Mona-bele/rote-notify/core/entity"
-	"github.com/Mona-bele/rote-notify/pkg/env"
-	"github.com/Mona-bele/rote-notify/pkg/rabbitmq"
-	"github.com/Mona-bele/rote-notify/pkg/security/jwt"
-	"time"
 )
 
 // NotificationsUserId struct
 type NotificationsUserId struct {
-	env      *env.Env
-	RabbitMQ *rabbitmq.RabbitMQ
-	jwt      *jwt.JWT
+	RabbitMQ rabbitmq.RabbitInterface
 }
 
 type Body struct {
@@ -30,6 +25,8 @@ type BodyPicle struct {
 	Body        string `json:"body"`
 	Type        string `json:"type"`
 	IsRead      bool   `json:"is_read"`
+	Token       string `json:"token,omitempty"`
+	Args        []any  `json:"args,omitempty"`
 }
 
 func (b *Body) String() string {
@@ -43,25 +40,45 @@ func (b *Body) String() string {
 }
 
 // NewNotificationsUserId creates a new NotificationsUserId instance
-func NewNotificationsUserId(env *env.Env) *NotificationsUserId {
+func NewNotificationsUserId(url string) *NotificationsUserId {
 
-	rmq := rabbitmq.NewRabbitMQ(env)
+	rmq := rabbitmq.NewRabbitmq(url, map[string]interface{}{})
 
-	if err := rmq.WaitForReady(10 * time.Second); err != nil {
-		logutils.Error("RabbitMQ not ready in time", err, nil)
+	if err := rmq.ExchangeDeclare(rabbitmq.Exchange{
+		Name:       "ex.picle.notification",
+		Kind:       "topic",
+		Durable:    true,
+		AutoDelete: false,
+	}); err != nil {
+		logutils.Error("Failed to declare exchange", err, nil)
 		return nil
 	}
 
-	rmq.QueuePicle()
+	if err := rmq.QueueDeclare(rabbitmq.Queue{
+		Name:       "queue_picle_notification",
+		Durable:    true,
+		AutoDelete: false,
+		Binds: &[]rabbitmq.Bind{
+			{ExchangeName: "ex.picle.notification", BindingKey: "rk.picle.notification"},
+			{ExchangeName: "ex.picle.notification", BindingKey: "rk.picle.notification.*"},
+			{ExchangeName: "ex.picle.notification", BindingKey: "rk.picle.notification.app"},
+			{ExchangeName: "ex.picle.notification", BindingKey: "rk.picle.notification.websocket"},
+			{ExchangeName: "ex.picle.notification", BindingKey: "rk.picle.notification.email"},
+		},
+	}); err != nil {
+		logutils.Error("Failed to declare queue rk.picle.notification.app", err, nil)
+		return nil
+	}
+
+	defer rmq.Close()
 
 	return &NotificationsUserId{
-		env:      env,
 		RabbitMQ: rmq,
 	}
 }
 
 // NotifyPicle notifies the user ID
-func (n *NotificationsUserId) NotifyPicle(ctx context.Context, userID string, body []byte, typeMessage entity.NotifyTypeMessage) {
+func (n *NotificationsUserId) NotifyPicle(ctx context.Context, userID string, body []byte, typeMessage entity.NotifyTypeMessage, args ...any) {
 	if body == nil {
 		body = []byte(typeMessage.GetNotifyTypeMessage())
 	}
@@ -72,6 +89,7 @@ func (n *NotificationsUserId) NotifyPicle(ctx context.Context, userID string, bo
 		Body:        string(body),
 		Type:        typeMessage.String(),
 		IsRead:      false,
+		Args:        args,
 	}
 
 	bodyPicleJson, err := json.Marshal(bodyPicle)
@@ -80,28 +98,32 @@ func (n *NotificationsUserId) NotifyPicle(ctx context.Context, userID string, bo
 		return
 	}
 
-	// Envia para notificação em app
-	err = n.RabbitMQ.PublishMessage(rabbitmq.Message{
-		Type:       typeMessage.String(),
-		UserID:     userID,
-		RoutingKey: "rk.picle.notification.app",
-		Body:       bodyPicleJson,
-	}, "application/json")
+	err = n.RabbitMQ.Producer(ctx, &rabbitmq.ProducerConfig{
+		Exchange: "ex.picle.notification",
+		Key:      "rk.picle.notification.app",
+	},
+		&rabbitmq.Message{
+			Data:        bodyPicleJson,
+			ContentType: "application/json",
+		},
+	)
 
 	if err != nil {
-		logutils.Error("Failed to publish to rk.picle.notification", err, nil)
+		logutils.Error("Failed to publish to rk.picle.notification.app", err, nil)
 		return
 	}
 
-	err = n.RabbitMQ.PublishMessage(rabbitmq.Message{
-		Type:       typeMessage.String(),
-		UserID:     userID,
-		RoutingKey: "rk.picle.notification.websocket",
-		Body:       bodyPicleJson,
-	}, "application/json")
+	err = n.RabbitMQ.Producer(ctx, &rabbitmq.ProducerConfig{
+		Exchange: "ex.picle.notification",
+		Key:      "rk.picle.notification.websocket",
+	},
+		&rabbitmq.Message{
+			Data:        bodyPicleJson,
+			ContentType: "application/json",
+		})
 
 	if err != nil {
-		logutils.Error("Failed to publish to rk.picle.notification.email", err, nil)
+		logutils.Error("Failed to publish to rk.picle.notification.websocket", err, nil)
 		return
 	}
 	logutils.Info("User ID notified", logutils.Fields{
@@ -110,18 +132,18 @@ func (n *NotificationsUserId) NotifyPicle(ctx context.Context, userID string, bo
 	})
 }
 
-// NotifyPicle notifies the user ID
-func (n *NotificationsUserId) NotifyApp(ctx context.Context, routingKey, userID string, body []byte, typeMessage entity.NotifyTypeMessage) {
+func (n *NotificationsUserId) NotifyApp(ctx context.Context, routingKey, userID string, body []byte, typeMessage string, args ...any) {
 	if body == nil {
-		body = []byte(typeMessage.GetNotifyTypeMessage())
+		body = []byte(typeMessage)
 	}
 
 	bodyPicle := BodyPicle{
 		RecipientID: userID,
-		Title:       typeMessage.String(),
+		Title:       typeMessage,
+		Type:        typeMessage,
 		Body:        string(body),
-		Type:        typeMessage.String(),
 		IsRead:      false,
+		Args:        args,
 	}
 
 	bodyPicleJson, err := json.Marshal(bodyPicle)
@@ -130,14 +152,18 @@ func (n *NotificationsUserId) NotifyApp(ctx context.Context, routingKey, userID 
 		return
 	}
 
-	// Envia para notificação em app
-	err = n.RabbitMQ.PublishMessage(rabbitmq.Message{
-		Type:       typeMessage.String(),
-		UserID:     userID,
-		RoutingKey: "rk.picle.notification." + routingKey,
-		Body:       bodyPicleJson,
-	}, "application/json")
+	if routingKey == "" {
+		routingKey = "app"
+	}
 
+	err = n.RabbitMQ.Producer(ctx, &rabbitmq.ProducerConfig{
+		Exchange: "ex.picle.notification",
+		Key:      "rk.picle.notification." + routingKey,
+	},
+		&rabbitmq.Message{
+			Data:        bodyPicleJson,
+			ContentType: "application/json",
+		})
 	if err != nil {
 		logutils.Error("Failed to publish to rk.picle.notification", err, nil)
 		return
@@ -145,31 +171,6 @@ func (n *NotificationsUserId) NotifyApp(ctx context.Context, routingKey, userID 
 
 	logutils.Info("User ID notified", logutils.Fields{
 		"user_id": userID,
-		"type":    typeMessage.GetNotifyTypeMessage(),
+		"type":    typeMessage,
 	})
-}
-
-/*
-	// Envia para notificação via e-mail
-	err = n.RabbitMQ.PublishMessage(rabbitmq.Message{
-		Type:       typeMessage.String(),
-		UserID:     userID,
-		RoutingKey: "rk.picle.notification.email",
-		Body:       bodyPicleJson,
-	}, "application/json")
-
-	if err != nil {
-		logutils.Error("Failed to publish to rk.picle.notification.email", err, nil)
-		return
-	}
-
-	logutils.Info("User ID notified", logutils.Fields{
-		"user_id": userID,
-		"type":    typeMessage.GetNotifyTypeMessage(),
-	})
-*/
-
-// CloseNotificationsUserId closes the RabbitMQ connection
-func (n *NotificationsUserId) CloseNotificationsUserId() {
-	n.RabbitMQ.CloseRabbitMQ()
 }

@@ -1,13 +1,14 @@
 module github.com/Mona-bele/rote-notify
 
-go 1.23.0
+go 1.24.2
+
+toolchain go1.24.4
 
 require (
+	github.com/Mona-bele/commons-tools v0.6.0
 	github.com/Mona-bele/logutils-go v1.3.0
-	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/jinzhu/gorm v1.9.16
 	github.com/joho/godotenv v1.5.1
-	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
 	gopkg.in/mail.v2 v2.3.1
@@ -17,6 +18,8 @@ require (
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
+	github.com/phuslu/log v1.0.88 // indirect
+	github.com/rabbitmq/amqp091-go v1.10.0 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.12.0 // indirect

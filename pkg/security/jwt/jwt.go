@@ -1,5 +1,6 @@
 package jwt
 
+/*
 import (
 	"crypto/rsa"
 	"encoding/base64"
@@ -135,7 +136,7 @@ func ParsePublicKey(pem []byte) (*rsa.PublicKey, error) {
 }
 
 // NewJWTFromEnv creates a new JWT instance from the environment
-func NewJWTFromEnv(env *env.Env) (*JWT, error) {
+ func NewJWTFromEnv(env *env.Env) (*JWT, error) {
 
 	decodeKey, err := base64.StdEncoding.DecodeString(env.JwtNotifyPrivateKey)
 	if err != nil {
@@ -151,3 +152,4 @@ func NewJWTFromEnv(env *env.Env) (*JWT, error) {
 
 	return NewJWT(privateKey, env), nil
 }
+*/

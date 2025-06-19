@@ -7,12 +7,7 @@ import (
 )
 
 type Env struct {
-	RabbitmqUrl         string
-	JwtNotifyPrivateKey string
-	JwtKid              string
-	JwtIssuer           string
-	JwtSubject          string
-	JwtAudience         string
+	RabbitmqUrl string
 }
 
 func LoadEnv(path string) *Env {
@@ -20,11 +15,6 @@ func LoadEnv(path string) *Env {
 
 	return &Env{
 		RabbitmqUrl: getEnv("RABBITMQ_URL"),
-		/*JwtNotifyPrivateKey: getEnv("JWT_NOTIFY_PRIVATE_KEY"),
-		JwtKid:              getEnv("JWT_KID"),
-		JwtIssuer:           getEnv("JWT_ISSUER"),
-		JwtSubject:          getEnv("JWT_SUBJECT"),
-		JwtAudience:         getEnv("JWT_AUDIENCE"),*/
 	}
 
 }
